@@ -1,48 +1,44 @@
-# app.py
 from flask import Flask, request, jsonify
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
+import joblib
 
 app = Flask(__name__)
 
+# Load the pre-trained model
+model = joblib.load('modelzuama/DeteksiFIx/decision_tree_model.joblib')
+
+@app.route('/')
+def welcome():
+    return 'Welcome to the model prediction API!'
 
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # Mengambil data dari request JSON
+        # Get data from the request
         data = request.get_json()
-        # Membuat DataFrame dari data yang diberikan
-        df = pd.DataFrame(data)
 
-        # Mengubah data kategorikal (Jenis_Kelamin) menjadi numerik
-        df['Jenis_Kelamin'] = df['Jenis_Kelamin'].map({'Laki-laki': 0, 'Perempuan': 1})
+        # Ensure that the expected features are present in the input data
+        expected_features = ['Jenis_Kelamin', 'Tinggi_Badan', 'Berat_Badan', 'Usia']
+        if not all(feature in data for feature in expected_features):
+            raise ValueError('Missing required features in input data')
 
-        # Memisahkan fitur dan label
-        X = df.drop('Risiko_Stunting', axis=1)
-        y = df['Risiko_Stunting']
+        # Convert 'Jenis_Kelamin' to numeric (0 for 'Laki-laki', 1 for 'Perempuan')
+        data['Jenis_Kelamin'] = 0 if data['Jenis_Kelamin'].lower() == 'laki-laki' else 1
 
-        # Melakukan prediksi menggunakan model yang telah dilatih
-        y_pred = model.predict(X)
+        # Create a DataFrame from the input data
+        input_data = pd.DataFrame([data])
 
-        # Mengembalikan hasil prediksi
-        return jsonify({'predictions': list(y_pred)})
+        # Make predictions
+        predictions = model.predict(input_data)
+
+        # Prepare response
+        response = {'predictions': predictions.tolist()}
+
+        return jsonify(response)
 
     except Exception as e:
         return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
-    # Membuat dan melatih model Decision Tree saat aplikasi dijalankan
-    data = pd.read_csv('DeteksiFIx/datasetfix2.csv')
-    df = pd.DataFrame(data)
-    df['Jenis_Kelamin'] = df['Jenis_Kelamin'].map({'Laki-laki': 0, 'Perempuan': 1})
-    X = df.drop('Risiko_Stunting', axis=1)
-    y = df['Risiko_Stunting']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-    model = DecisionTreeClassifier(random_state=42)
-    model.fit(X_train, y_train)
-
-    # Jalankan aplikasi Flask
     app.run(debug=True)
